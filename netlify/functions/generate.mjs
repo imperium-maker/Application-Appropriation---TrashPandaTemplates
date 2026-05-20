@@ -1,4 +1,18 @@
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_MODEL = "gemini-2.5-flash";
+
+function normalizeModel(model) {
+  const requested = String(model || "").trim();
+  const deprecatedOrUnavailable = new Set([
+    "gemini-2.0-flash",
+    "models/gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "models/gemini-1.5-flash"
+  ]);
+
+  if (!requested || deprecatedOrUnavailable.has(requested)) return DEFAULT_MODEL;
+  return requested.replace(/^models\//, "");
+}
 
 function jsonResponse(status, body) {
   return new Response(JSON.stringify(body), {
@@ -45,7 +59,8 @@ function buildGeminiPayload(payload = {}) {
 }
 
 async function callGemini(model, geminiPayload, apiKey) {
-  const url = `${GEMINI_API_BASE}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const resolvedModel = normalizeModel(model);
+  const url = `${GEMINI_API_BASE}/${encodeURIComponent(resolvedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,7 +72,7 @@ async function callGemini(model, geminiPayload, apiKey) {
   try {
     json = text ? JSON.parse(text) : {};
   } catch (_) {
-    return { ok: false, status: response.status, error: text || "Invalid Gemini response." };
+    return { ok: false, status: response.status, error: text || "Invalid Gemini response.", model: resolvedModel };
   }
 
   if (!response.ok) {
@@ -65,11 +80,12 @@ async function callGemini(model, geminiPayload, apiKey) {
       ok: false,
       status: response.status,
       error: json?.error?.message || `Gemini request failed with HTTP ${response.status}`,
-      raw: json
+      raw: json,
+      model: resolvedModel
     };
   }
 
-  return { ok: true, status: response.status, raw: json };
+  return { ok: true, status: response.status, raw: json, model: resolvedModel };
 }
 
 export default async function handler(request) {
@@ -89,7 +105,8 @@ export default async function handler(request) {
     return jsonResponse(400, { error: "Request body must be valid JSON." });
   }
 
-  const model = body?.model || body?.payload?.model || "gemini-2.5-flash";
+  const requestedModel = body?.model || body?.payload?.model || DEFAULT_MODEL;
+  const model = normalizeModel(requestedModel);
   const payload = body?.payload || body || {};
   const action = body?.action || "generate";
   const geminiPayload = body?.contents ? body : buildGeminiPayload(payload);
@@ -97,16 +114,17 @@ export default async function handler(request) {
   try {
     const result = await callGemini(model, geminiPayload, apiKey);
     if (!result.ok) {
-      return jsonResponse(result.status || 500, { error: result.error, raw: result.raw });
+      return jsonResponse(result.status || 500, { error: result.error, raw: result.raw, model: result.model, requestedModel });
     }
 
     return jsonResponse(200, {
       text: getCandidateText(result.raw),
       raw: result.raw,
-      model,
+      model: result.model,
+      requestedModel,
       action
     });
   } catch (error) {
-    return jsonResponse(500, { error: error?.message || "Gemini request failed." });
+    return jsonResponse(500, { error: error?.message || "Gemini request failed.", model, requestedModel });
   }
 }
