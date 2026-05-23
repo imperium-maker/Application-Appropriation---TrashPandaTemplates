@@ -1,3 +1,4 @@
+// Build verified: 2026-05-23 13:35 PDT - Safety-claim hardening, placeholder scrubber, deterministic cover-letter date patch.
 
   const API_GENERATE_ENDPOINT = "/api/generate";
   const GEMINI_API_KEY = "SERVER_SIDE_NETLIFY_ENV"; // Not used in browser. Netlify function reads process.env.GEMINI_API_KEY.
@@ -9,6 +10,62 @@
   const MODEL_FALLBACKS = [SECONDARY_MODEL, LEGACY_MODEL];
   const QUESTION_BANNED_TERMS = ["horoscope", "astrology", "zodiac", "religion", "political party", "birth date", "social security"];
   const DOCUMENT_PLACEHOLDER_PATTERNS = [/lorem ipsum/i, /\[insert/i, /\[company name\]/i, /\[your /i, /to be \(determined|filled\)/i];
+
+
+  const GENERATED_DOCUMENT_DATE = (() => {
+    try {
+      return new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    } catch (_) {
+      return new Date().toLocaleDateString();
+    }
+  })();
+
+  const UNSUPPORTED_SAFETY_CLAIM_PATTERNS = [
+    /\bzero\s+(?:incidents?|accidents?|violations?)\b/gi,
+    /\bno\s+(?:incidents?|accidents?|violations?)\b/gi,
+    /\bincident[-\s]?free\b/gi,
+    /\baccident[-\s]?free\b/gi,
+    /\bviolation[-\s]?free\b/gi,
+    /\bclean\s+(?:safety|driving|disciplinary)\s+record\b/gi,
+    /\bspotless\s+(?:safety|driving|disciplinary)\s+record\b/gi,
+    /\bunblemished\s+(?:safety|driving|disciplinary)\s+record\b/gi
+  ];
+
+  const PLACEHOLDER_CLEANUP_PATTERNS = [
+    /\[[^\]]*(?:company\s+address|address\s+if\s+known|if\s+known,\s*otherwise\s+omit)[^\]]*\]/gi,
+    /\[(?:date|company\s+name|your\s+name|insert[^\]]*|recipient[^\]]*|hiring\s+manager[^\]]*)\]/gi,
+    /\bTBD\b/gi,
+    /\blorem ipsum\b/gi
+  ];
+
+  function stripUnsupportedSafetyClaims(text) {
+    let out = String(text || '');
+    UNSUPPORTED_SAFETY_CLAIM_PATTERNS.forEach(pattern => {
+      out = out.replace(pattern, 'safety-focused');
+    });
+    return out;
+  }
+
+  function scrubPlaceholdersAndDates(html) {
+    let out = String(html || '');
+    PLACEHOLDER_CLEANUP_PATTERNS.forEach(pattern => {
+      out = out.replace(pattern, '');
+    });
+    out = out.replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+20\d{2}\b/g, GENERATED_DOCUMENT_DATE);
+    out = out.replace(/<p>\s*<\/p>/gi, '');
+    out = out.replace(/<div>\s*<\/div>/gi, '');
+    out = out.replace(/[ \t]{2,}/g, ' ');
+    return out;
+  }
+
+  function hardenProfessionalOutput(html) {
+    return scrubPlaceholdersAndDates(stripUnsupportedSafetyClaims(html));
+  }
+
+  function hardenPlainAuditText(text) {
+    return stripUnsupportedSafetyClaims(text).replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+20\d{2}\b/g, GENERATED_DOCUMENT_DATE);
+  }
+
 
 
   const ROLE_POLICIES = {
@@ -244,7 +301,7 @@
     out = out.replace(/Turbine\s*\/\s*Turbojet\s*:\s*([0-9,]+)/gi, 'Turbine: $1; turbojet allocation should be confirmed');
     out = out.replace(/Turbine\s*:\s*([0-9,]+)\s*\(includes\s+Turbojet\)/gi, 'Turbine: $1; turbojet allocation should be confirmed');
     out = out.replace(/([0-9,]+)\s+turbine\/turbojet/gi, '$1 turbine; turbojet allocation should be confirmed');
-    return out;
+    return hardenProfessionalOutput(out);
   }
 
 
@@ -934,6 +991,7 @@ The Gemini key in this browser build is invalid/rejected. Check the Netlify GEMI
       if (documentContainsPlaceholders(parsed.resumeTailored) || documentContainsPlaceholders(parsed.coverLetter)) parsed.missingInfo.push('Placeholder-style content detected in a final document. Review before use.');
       parsed.missingInfo = sanitizeMissingQueue(parsed.missingInfo);
       cleanupGeneratedPackage(parsed);
+      parsed = cleanupGeneratedPackage(parsed) || parsed;
       appState.lastGeneratedData = parsed;
       hideRaccoonOverlay();
       transitionToOutputs();
@@ -1154,6 +1212,7 @@ Your research data is preserved. Please try again after checking the console/net
 
 
   function wrapHTML(content, title) {
+    content = hardenProfessionalOutput(content);
     const meta = buildExportMeta();
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><meta name="viewport" content="width=device-width, initial-scale=1" /><style>:root { --ink:#111827; --muted:#475569; --line:#cbd5e1; --soft:#f8fafc; --accent:#0f172a; }body { font-family: 'Inter', Helvetica, Arial, sans-serif; line-height: 1.58; color: var(--ink); max-width: 860px; margin: 0 auto; padding: 42px; background: #fff; }.doc-shell { border: 1px solid #e2e8f0; border-radius: 18px; padding: 34px 36px; box-shadow: 0 10px 30px rgba(15,23,42,0.06); }.doc-header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding-bottom:18px; border-bottom:2px solid var(--accent); margin-bottom:24px; }.doc-kicker { font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }.doc-title { font-size:30px; line-height:1.15; margin:0; color:#020617; }.doc-meta { min-width: 220px; border:1px solid var(--line); border-radius:12px; background:var(--soft); padding:12px 14px; font-size:12.5px; }.doc-meta strong { display:inline-block; width:84px; color:#0f172a; }h1 { font-size: 26px; margin: 0 0 18px; color: #0f172a; }h2 { margin-top: 24px; font-size: 18px; border-bottom: 1px solid var(--line); padding-bottom: 6px; color: #0f172a; }h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; margin-top: 16px; color: #0f172a; }p { margin: 8px 0; font-size: 14px; }ul, ol { margin: 8px 0 12px; padding-left: 22px; }li { margin-bottom: 6px; font-size: 14px; }table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }th, td { border: 1px solid var(--line); padding: 9px 10px; vertical-align: top; }th { background: #f8fafc; text-align: left; }blockquote { margin: 14px 0; padding: 10px 14px; border-left: 4px solid #94a3b8; background: #f8fafc; }hr { border: none; border-top: 1px solid var(--line); margin: 20px 0; }a { color: #1d4ed8; text-decoration: none; font-weight: 500; }.doc-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }@page { size: letter; margin: 0.65in; }</style></head><body><div class="doc-shell"><div class="doc-header"><div><div class="doc-kicker">Application Appropriation Package</div><h1 class="doc-title">${escapeHtml(title)}</h1></div><div class="doc-meta"><div><strong>Applicant</strong>${escapeHtml(meta.applicantName)}</div><div><strong>Company</strong>${escapeHtml(meta.companyName)}</div><div><strong>Role</strong>${escapeHtml(meta.role)}</div><div><strong>Generated</strong>${escapeHtml(meta.generatedAt)}</div></div></div>${content}<div class="doc-footer">Prepared from structured application inputs. Review all facts before sending.</div></div></body></html>`;
   }
@@ -1275,7 +1334,7 @@ Your research data is preserved. Please try again after checking the console/net
       '',
       '=== Interview Prep / Strategy ===', plainTextFromHTML(data.strategyAdvice)
     ].join('\n');
-    userFolder.file('Application_CopyPaste.txt', copyPaste);
+    userFolder.file('Application_CopyPaste.txt', hardenPlainAuditText(copyPaste));
 
     const tocLines = [
       'Application Appropriation ZIP',
