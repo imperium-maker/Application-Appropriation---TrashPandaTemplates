@@ -763,19 +763,19 @@ function detectRoleKey(roleInput) {
               ? `Job Description provided — focus research on company context, role norms, and current market for this specific posting.`
               : `No job description provided — research current market standards, typical requirements, salary norms, and hiring practices for this role.`,
             ``,
-            `Return a structured plain-text research brief covering:`,
+            `Return a highly concise, bulleted plain-text research brief (maximum 1-2 sentences per point) covering:`,
             `1. Current market requirements and must-have qualifications for this role`,
             `2. Common nice-to-have skills and certifications`,
             `3. Typical hiring process and evaluation criteria`,
             `4. Salary range and compensation norms`,
             `5. Industry-specific red flags or differentiators`,
             `6. Company context (if JD provided with identifiable employer)`,
-            `Be specific and flag anything uncertain.`
+            `Be brief, concise, and return bullet points only.`
           ].join('\n'),
           systemPrompt: 'You are a hiring market research specialist. Return factual, current information only in plain text. Never invent citations.',
           useGoogleSearch: true,
           temperature: 0.1,
-          maxOutputTokens: 4096
+          maxOutputTokens: 1200
         };
         const { json: gr } = await fetchWithModelFallback(selectedModel(), groundingPayload, 'simple');
         appState.liveResearch = gr?.text || '';
@@ -882,46 +882,83 @@ The Gemini key in this browser build is invalid/rejected. Check the Netlify GEMI
         `Interview Edge Questions (generate a full prep guide for each):\n${(appState.reviewData?.edgeQuestions || []).map((q, i) => `${i + 1}. ${q}`).join('\n') || '[None provided]'}`
       ].join('\n\n');
 
-
-      const systemPrompt = [
+      const systemPromptResumes = [
         'You are an expert professional application package writer.',
         'Use only supported user facts plus verified/inferred role analysis already provided.',
         'Do not fabricate credentials, dates, metrics, hours, licenses, certifications, or tools.',
         'REGULATED FACT PRESERVATION: For licenses, ratings, certifications, medical status, flight hours, aircraft types, legal qualifications, security clearances, training programs, degree status, and regulated-role requirements, preserve the exact user-provided wording. Do not rename, convert, upgrade, simplify, or infer equivalent wording. Do not treat related terms as equivalent unless the user explicitly confirms equivalence. If the job requires a more specific term than the user provided, keep the user-facing document clean but put the uncertainty in missingInfo and audit sections.',
         'Examples of the preservation rule: do not convert turbine to turbojet; do not convert G-200 to G650; do not rewrite a certificate title into a different certificate title; do not infer a clean driving record, zero incidents, security clearance, degree, or license currency unless the user confirms it.',
-        'Do not insert placeholders inside the final resume or cover letter. If something is unresolved, omit the unsupported claim and list the issue in missingInfo.',
+        'Do not insert placeholders inside the final resume. If something is unresolved, omit the unsupported claim and list the issue in missingInfo.',
         'Keep the final documents clean, professional, ATS-conscious, and role-specific.',
         'For regulated roles, preserve the distinction between legal minimums, common hiring expectations, and employer-specific preferences.',
         '',
         'Return ONLY valid JSON with keys:',
         '{',
         '  "missingInfo": ["remaining unresolved items"],',
-        '  "researchBrief": "HTML string",',
-        '  "roleSummary": "HTML string",',
-        '  "gapAnalysis": "HTML string",',
-        '  "edgeQuestions": "HTML string — a complete Interview Prep Guide. For EACH edge question provided, produce a structured section with: an <h3> with the question text; <p><strong>Why this question matters:</strong> 1-2 sentences on its relevance to this specific role and what it is probing for; <p><strong>What the interviewer wants to hear:</strong> the quality or signal a great answer demonstrates; <p><strong>Suggested answer framework:</strong> a concrete 3-5 sentence suggested answer tailored to this applicant\'s actual background, experience, and the role — not generic advice; <p><strong>Tips & traps:</strong> an <ul> of 2-3 practical bullet points — what to emphasize, common mistakes to avoid, or how to make the answer memorable. Write the full guide as clean, print-ready HTML.",',
-        '  "verifiedRequirements": "HTML string",',
-        '  "sourceAudit": "HTML string",',
         '  "resumeATS": "HTML string",',
         '  "resumeTailored": "HTML string",',
-        '  "coverLetter": "HTML string",',
         '  "keywordAddendum": "HTML string",',
-        '  "strategyAdvice": "HTML string with interview prep, outreach note, and alternate targets",',
         '  "meta": { "applicantName": "", "companyName": "", "role": "" }',
         '}'
       ].join('\n');
 
+      const systemPromptCoverLetter = [
+        'You are an expert professional application package writer.',
+        'Use only supported user facts plus verified/inferred role analysis already provided.',
+        'Do not fabricate credentials, dates, metrics, hours, licenses, certifications, or tools.',
+        'REGULATED FACT PRESERVATION: For licenses, ratings, certifications, medical status, flight hours, aircraft types, legal qualifications, security clearances, training programs, degree status, and regulated-role requirements, preserve the exact user-provided wording. Do not rename, convert, upgrade, simplify, or infer equivalent wording. Do not treat related terms as equivalent unless the user explicitly confirms equivalence.',
+        'Do not insert placeholders inside the final cover letter. If something is unresolved, omit the unsupported claim.',
+        'Keep the final documents clean, professional, and role-specific.',
+        'For regulated roles, preserve the distinction between legal minimums, common hiring expectations, and employer-specific preferences.',
+        '',
+        'Return ONLY valid JSON with keys:',
+        '{',
+        '  "coverLetter": "HTML string",',
+        '  "strategyAdvice": "HTML string with interview prep, outreach note, and alternate targets"',
+        '}'
+      ].join('\n');
 
-      const payload = { prompt, systemPrompt, responseMimeType: 'application/json', temperature: 0.18, maxOutputTokens: 16384 };
-      const { json } = await fetchWithModelFallback(selectedModel(), payload, 'generate');
-      const parsed = parseAIJSONResponse(json?.text || '{}');
+      const systemPromptInterviewPrep = [
+        'You are an expert professional interview preparation coach.',
+        'Use only supported user facts plus verified/inferred role analysis already provided.',
+        'Return ONLY valid JSON with keys:',
+        '{',
+        '  "edgeQuestions": "HTML string — a complete Interview Prep Guide. For EACH edge question provided, produce a structured section with: an <h3> with the question text; <p><strong>Why this question matters:</strong> 1-2 sentences on its relevance to this specific role and what it is probing for; <p><strong>What the interviewer wants to hear:</strong> the quality or signal a great answer demonstrates; <p><strong>Suggested answer framework:</strong> a concrete 3-5 sentence suggested answer tailored to this applicant\'s actual background, experience, and the role — not generic advice; <p><strong>Tips & traps:</strong> an <ul> of 2-3 practical bullet points — what to emphasize, common mistakes to avoid, or how to make the answer memorable. Write the full guide as clean, print-ready HTML."'
+        '}'
+      ].join('\n');
+
+      const payloadResumes = { prompt, systemPrompt: systemPromptResumes, responseMimeType: 'application/json', temperature: 0.18, maxOutputTokens: 8192 };
+      const payloadCoverLetter = { prompt, systemPrompt: systemPromptCoverLetter, responseMimeType: 'application/json', temperature: 0.18, maxOutputTokens: 4096 };
+      const payloadInterviewPrep = { prompt, systemPrompt: systemPromptInterviewPrep, responseMimeType: 'application/json', temperature: 0.18, maxOutputTokens: 4096 };
+
+      const [resumesRes, coverLetterRes, interviewPrepRes] = await Promise.all([
+        fetchWithModelFallback(selectedModel(), payloadResumes, 'generate'),
+        fetchWithModelFallback(selectedModel(), payloadCoverLetter, 'generate'),
+        fetchWithModelFallback(selectedModel(), payloadInterviewPrep, 'generate')
+      ]);
+
+      const parsedResumes = parseAIJSONResponse(resumesRes?.json?.text || '{}');
+      const parsedCoverLetter = parseAIJSONResponse(coverLetterRes?.json?.text || '{}');
+      const parsedInterviewPrep = parseAIJSONResponse(interviewPrepRes?.json?.text || '{}');
+
+      const parsed = {
+        missingInfo: parsedResumes.missingInfo || [],
+        resumeATS: parsedResumes.resumeATS,
+        resumeTailored: parsedResumes.resumeTailored,
+        keywordAddendum: parsedResumes.keywordAddendum,
+        meta: parsedResumes.meta,
+        coverLetter: parsedCoverLetter.coverLetter,
+        strategyAdvice: parsedCoverLetter.strategyAdvice,
+        edgeQuestions: parsedInterviewPrep.edgeQuestions
+      };
+
       parsed.missingInfo = sanitizeMissingQueue(parsed.missingInfo || []);
       parsed.researchBrief = normalizeHTML(parsed.researchBrief || appState.reviewData?.researchBrief, 'No research brief returned.');
       parsed.roleSummary = normalizeHTML(parsed.roleSummary || appState.reviewData?.criteriaMap, 'No role summary returned.');
       parsed.gapAnalysis = normalizeHTML(parsed.gapAnalysis || appState.reviewData?.gapAnalysisHTML, 'No gap analysis returned.');
       parsed.edgeQuestions = normalizeHTML(parsed.edgeQuestions || appState.reviewData?.edgeQuestionsHTML, 'No edge questions returned.');
-      parsed.verifiedRequirements = mergeGroundingSources(json?.raw, normalizeHTML(parsed.verifiedRequirements || appState.reviewData?.verifiedRequirements, 'No verified requirements returned.'));
-      parsed.sourceAudit = mergeGroundingSources(json?.raw, normalizeHTML(parsed.sourceAudit || appState.reviewData?.sourceAudit, 'No source audit returned.'));
+      parsed.verifiedRequirements = mergeGroundingSources(resumesRes?.json?.raw, normalizeHTML(parsed.verifiedRequirements || appState.reviewData?.verifiedRequirements, 'No verified requirements returned.'));
+      parsed.sourceAudit = mergeGroundingSources(resumesRes?.json?.raw, normalizeHTML(parsed.sourceAudit || appState.reviewData?.sourceAudit, 'No source audit returned.'));
       parsed.resumeATS = normalizeHTML(parsed.resumeATS, 'No ATS resume returned.');
       parsed.resumeTailored = normalizeHTML(parsed.resumeTailored, 'No tailored resume returned.');
       parsed.coverLetter = normalizeHTML(parsed.coverLetter, 'No cover letter returned.');
