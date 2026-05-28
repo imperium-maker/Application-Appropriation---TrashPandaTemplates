@@ -461,7 +461,8 @@ function detectRoleKey(roleInput) {
       contents: [{ role: "user", parts: [{ text: payload.prompt || "" }] }],
       generationConfig: {
         temperature: payload.temperature == null ? 0.35 : payload.temperature,
-        maxOutputTokens: payload.maxOutputTokens || 8192
+        maxOutputTokens: payload.maxOutputTokens || 8192,
+        thinkingConfig: { thinkingBudget: 0 }
       }
     };
 
