@@ -266,7 +266,13 @@
 
   function normalizeHTML(value, fallbackTitle = '') {
     if (!value) return fallbackTitle ? `<p>${escapeHtml(fallbackTitle)}</p>` : '<p>No content.</p>';
-    return String(value).replace(/```html/gi, '').replace(/```/g, '').trim();
+    let out = String(value).replace(/```html/gi, '').replace(/```/g, '').trim();
+    // Strip nested document shell tags (Fix 2: prevent double-wrapping in export)
+    out = out.replace(/<!DOCTYPE[^>]*>/gi, '');
+    out = out.replace(/<html[^>]*>/gi, '').replace(/<\/html>/gi, '');
+    out = out.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+    out = out.replace(/<body[^>]*>/gi, '').replace(/<\/body>/gi, '');
+    return out.trim();
   }
 
 
