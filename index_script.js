@@ -1,4 +1,4 @@
-// Build verified: 2026-05-23 13:35 PDT - Safety-claim hardening, placeholder scrubber, deterministic cover-letter date patch.
+// Build verified: 2026-05-28 21:12 PDT | Stack: GitHub → Render → TrashPandatech.com | Fixes: analysis compaction, normalizeHTML wrapper strip (Fix 2), thinkingBudget=0, safety-claim hardening, placeholder scrubber, deterministic date.
 
   const API_GENERATE_ENDPOINT = "/api/generate";
   const GEMINI_API_KEY = "SERVER_SIDE_NETLIFY_ENV"; // Not used in browser. Netlify function reads process.env.GEMINI_API_KEY.
