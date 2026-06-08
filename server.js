@@ -16,9 +16,16 @@ const MIME_TYPES = {
   '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
+
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ── Compaction logic (ported from Netlify generate.mjs) ──────────────────────
 
@@ -255,14 +262,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ── API: warm-up ping ──
+  if (req.method === 'GET' && req.url === '/api/ping') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', ts: Date.now() }));
+    return;
+  }
+
+  // ── API: generate ──
   if (req.method === 'POST' && req.url === '/api/generate') {
     handleApiRequest(req, res);
     return;
   }
 
-  let filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
+  // ── Static file routing from public/ ──
+  let urlPath = req.url.split('?')[0]; // strip query string
 
-  if (!filePath.startsWith(__dirname)) {
+  // /app and /app/ → serve the app's index.html
+  if (urlPath === '/app' || urlPath === '/app/') {
+    urlPath = '/app/index.html';
+  }
+
+  // Root → welcome page
+  if (urlPath === '/') {
+    urlPath = '/index.html';
+  }
+
+  let filePath = path.join(PUBLIC_DIR, urlPath);
+
+  // Security: prevent path traversal
+  if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     res.end('Forbidden');
     return;
@@ -274,7 +303,8 @@ const server = http.createServer((req, res) => {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       if (err.code === 'ENOENT') {
-        fs.readFile(path.join(__dirname, 'index.html'), (err2, data2) => {
+        // Fallback: serve welcome page for unknown routes
+        fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err2, data2) => {
           if (err2) { res.writeHead(404); res.end('Not found'); return; }
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(data2);

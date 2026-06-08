@@ -1,0 +1,157 @@
+<!-- TrashPandatech.com Welcome Page | Built: 2026-05-28 | Stack: GitHub → Render → TrashPandatech.com -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrashPanda Templates — Application Package Builder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* ── Video container ── */
+    #video-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16 / 9;
+    }
+
+    #intro-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* ── Launch button (hidden until video ends) ── */
+    #launch-btn {
+      display: none;
+      margin-top: 28px;
+      padding: 16px 52px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #000;
+      background: linear-gradient(135deg, #4cff72, #00c44f);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 0 28px rgba(76, 255, 114, 0.55);
+      transition: transform 0.15s, box-shadow 0.15s;
+      animation: pulse 2s infinite;
+    }
+
+    #launch-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 42px rgba(76, 255, 114, 0.8);
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 28px rgba(76, 255, 114, 0.55); }
+      50%       { box-shadow: 0 0 52px rgba(76, 255, 114, 0.9); }
+    }
+
+    /* ── Skip link ── */
+    #skip-link {
+      position: fixed;
+      bottom: 18px;
+      right: 22px;
+      font-size: 0.78rem;
+      color: #555;
+      cursor: pointer;
+      text-decoration: underline;
+      transition: color 0.2s;
+      user-select: none;
+    }
+    #skip-link:hover { color: #aaa; }
+
+    /* ── Server warm-up status (invisible to user) ── */
+    #warmup-status { display: none; }
+
+    /* ── Fade-in animation for button ── */
+    .fade-in {
+      animation: fadeIn 0.8s ease forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Mobile adjustments ── */
+    @media (max-width: 600px) {
+      #video-wrapper { max-width: 100%; }
+      #launch-btn { font-size: 1rem; padding: 14px 36px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="video-wrapper">
+    <video
+      id="intro-video"
+      src="welcome_intro.mp4"
+      autoplay
+      muted
+      playsinline
+      preload="auto"
+    ></video>
+  </div>
+
+  <button id="launch-btn" onclick="launchApp()">Launch App</button>
+
+  <span id="skip-link" onclick="skipIntro()">Skip intro</span>
+
+  <div id="warmup-status" aria-hidden="true"></div>
+
+  <script>
+    // ── Server warm-up ping — fires immediately on page load ──
+    // Silently wakes the Render server while the user watches the video
+    (function warmUpServer() {
+      fetch('/api/ping', { method: 'GET', cache: 'no-store' })
+        .catch(() => {
+          // If /api/ping doesn't exist, try the root API endpoint
+          fetch('/api/generate', { method: 'GET', cache: 'no-store' }).catch(() => {});
+        });
+    })();
+
+    const video  = document.getElementById('intro-video');
+    const btn    = document.getElementById('launch-btn');
+    const skip   = document.getElementById('skip-link');
+
+    // Show Launch App button when video ends
+    video.addEventListener('ended', showLaunchButton);
+
+    // Also show button if video fails to load
+    video.addEventListener('error', showLaunchButton);
+
+    function showLaunchButton() {
+      btn.style.display = 'block';
+      btn.classList.add('fade-in');
+      skip.style.display = 'none';
+    }
+
+    function launchApp() {
+      // Navigate to the app
+      window.location.href = '/app';
+    }
+
+    function skipIntro() {
+      video.pause();
+      showLaunchButton();
+    }
+  </script>
+</body>
+</html>
